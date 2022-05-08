@@ -156,6 +156,7 @@ logger.info("Test write to thingspeak")
 channel = thingspeak(channel=appSettings['THINGSPEAK']['CHANNELID'], apiKey=appSettings['THINGSPEAK']['APIKEY'])
 channel.field[channel.field_name(name='Humidity')] = sensorData['Humidity']
 channel.field[channel.field_name(name='Temp')] = sensorData['TempF']
+channel.field[channel.field_name(name='Pressure')] = sensorData['Pressure']
 channel.post_update()
 
 #sendSMS("Current datetime is: " + str(datetime.now()))
