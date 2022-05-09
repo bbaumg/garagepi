@@ -1,0 +1,14 @@
+[Unit]
+Description=GaragePi
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/garagepi
+Environment=PYTHONPATH=/home/pi/garagepi
+ExecStart=/home/pi/garagepi/bin/python script.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

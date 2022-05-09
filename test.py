@@ -17,11 +17,11 @@ from bme280.bme280 import bme280
 
 
 # Setup logging
-#logLevel = logging.CRITICAL
+logLevel = logging.CRITICAL
 #logLevel = logging.ERROR
 #logLevel = logging.WARNING
 #logLevel = logging.INFO
-logLevel = logging.DEBUG
+#logLevel = logging.DEBUG
 logFormat = '%(asctime)s - %(module)s %(funcName)s - %(levelname)s - %(message)s'
 logDateFormat = '%Y-%m-%d %H:%M:%S'
 logFilename = 'garagepi.log'
@@ -63,6 +63,19 @@ def getDoorStatus(doorName):
   logger.debug(doorState)
   return doorState
 
+def setupDict(dictObj, dictName):
+  #dictObj = dict()
+  #dictObj['objectName'] = dictName.name
+  #dictObj['name'] = dictName.name
+  dictObj['name'] = dictName
+  dictObj['lastStateChange'] = dict()
+  dictObj['lastStateChange']['State'] = 'none'
+  dictObj['lastStateChange']['When'] = 'none'
+  dictObj['stateLastRead'] = dict()
+  dictObj['stateLastRead']['State'] = 'none'
+  dictObj['stateLastRead']['When'] = 'none'
+  logger.debug(dictObj)
+
 
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # END FUNCTIONS - BEGIN PROGRAM
@@ -76,10 +89,14 @@ logger.critical(os.uname())
 logger.critical(GPIO.RPI_INFO)
 logger.critical("Log Level = " + str(logLevel))
 
-logger.info("Reading config file")
+logger.critical("Reading config file")
 with open("settings.yaml", 'r') as stream:
   appSettings=yaml.safe_load(stream)
   logger.info(appSettings)
+
+logLevelNew = appSettings['LOGLEVEL']
+logger.critical("Changing log level from " + str(logLevel) + " to " + str(logLevelNew))
+logging.getLogger().setLevel(logLevelNew)
 
 logger.info("Setting up GPIO Inputs")
 GPIO.setmode(GPIO.BCM)
@@ -88,20 +105,28 @@ GPIO.setup(appSettings['DOORMAIN']['UPGPIO'], GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(appSettings['DOORMAIN']['DOWNPGPIO'], GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(appSettings['DOORSIDE']['UPGPIO'], GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(appSettings['DOORSIDE']['DOWNPGPIO'], GPIO.IN, pull_up_down=GPIO.PUD_UP)
-# logger.info("GPIO inMainDoorUp(" + str(inMainDoorUp) + "): " + str(GPIO.input(inMainDoorUp)))
-# logger.info("GPIO inMainDoorDown(" + str(inMainDoorDown) + "): " + str(GPIO.input(inMainDoorDown)))
-# logger.info("GPIO inSideDoorUp(" + str(inSideDoorUp) + "): " + str(GPIO.input(inSideDoorUp)))
-# logger.info("GPIO inSideDoorDown(" + str(inSideDoorDown) + "): " + str(GPIO.input(inSideDoorDown)))
-# logger.info("GPIO inMainDoorUp(" + str(inMainDoorUp) + "): " + str(GPIO.input(inMainDoorUp)))
-# logger.info("GPIO inMainDoorDown(" + str(inMainDoorDown) + "): " + str(GPIO.input(inMainDoorDown)))
-# logger.info("GPIO inSideDoorUp(" + str(inSideDoorUp) + "): " + str(GPIO.input(inSideDoorUp)))
-# logger.info("GPIO inSideDoorDown(" + str(inSideDoorDown) + "): " + str(GPIO.input(inSideDoorDown)))
 logger.info("GPIO Setup Complete")
 
+logger.info("Setting up dictionary for tracking states of things")
 dictMainDoor = dict()
-dictSideDoor = dict()
+setupDict(dictMainDoor, 'dictMainDoor')
 logger.debug(dictMainDoor)
+dictSideDoor = dict()
+setupDict(dictSideDoor, 'dictSideDoor')
 logger.debug(dictSideDoor)
+dictTemp = dict()
+setupDict(dictTemp, 'dictTemp')
+logger.debug(dictTemp)
+dictHumid = dict()
+setupDict(dictHumid, 'dictHumid')
+logger.debug(dictHumid)
+dictPressure = dict()
+setupDict(dictPressure, 'dictPressure')
+logger.debug(dictPressure)
+# dictAlert = dict()
+# setupDict(dictAlert)
+# logger.debug(dictAlert)
+
 
 """
 Array structure
@@ -144,21 +169,6 @@ Logic
 
 
 
-sensor = bme280()
-sensorData = dict()
-sensorData = sensor.readBME280Data()
-logger.debug(sensorData)
-#print(sensor.readBME280ID())
-#print(sensor.readBME280Data()['TempF'])
-
-
-logger.info("Test write to thingspeak")
-channel = thingspeak(channel=appSettings['THINGSPEAK']['CHANNELID'], apiKey=appSettings['THINGSPEAK']['APIKEY'])
-channel.field[channel.field_name(name='Humidity')] = sensorData['Humidity']
-channel.field[channel.field_name(name='Temp')] = sensorData['TempF']
-channel.field[channel.field_name(name='Pressure')] = sensorData['Pressure']
-channel.post_update()
-
 #sendSMS("Current datetime is: " + str(datetime.now()))
 
 
@@ -166,16 +176,96 @@ channel.post_update()
 
 try:
   while True:
-    dictMainDoor['stateLastRead']['State'] = getDoorStatus("DOORMAIN")
-    logger.debug(dictMainDoor)
-    logger.debug(getDoorStatus("DOORSIDE"))
-    # logger.debug("GPIO inMainDoorUp(" + str(inMainDoorUp) + "): " + str(GPIO.input(inMainDoorUp)))
-    # logger.debug("GPIO inMainDoorDown(" + str(inMainDoorDown) + "): " + str(GPIO.input(inMainDoorDown)))
-    # logger.debug("GPIO inSideDoorUp(" + str(inSideDoorUp) + "): " + str(GPIO.input(inSideDoorUp)))
-    # logger.debug("GPIO inSideDoorDown(" + str(inSideDoorDown) + "): " + str(GPIO.input(inSideDoorDown)))
-    # time.sleep(1)
+    loopTime = datetime.now()
+    anyChanges = False
+    # Read the environmental sensor and store in a dictionaries for later use
+    sensor = bme280()
+    sensorData = dict()
+    sensorData = sensor.readBME280Data()
+    logger.debug(sensorData)
 
-    time.sleep(3)
+
+
+
+    # Prepare the thingspeak Channel
+    channel = thingspeak(channel=appSettings['THINGSPEAK']['CHANNELID'], apiKey=appSettings['THINGSPEAK']['APIKEY'])
+
+    # Test if the temp has changed
+    logger.debug
+    dictTemp['stateLastRead']['State'] = round(sensorData['TempF'], 0)
+    dictTemp['stateLastRead']['When'] = loopTime
+    if dictTemp['lastStateChange']['State'] == 'none' or dictTemp['lastStateChange']['State'] != dictTemp['stateLastRead']['State']:
+      dictTemp['lastStateChange']['State'] = dictTemp['stateLastRead']['State']
+      dictTemp['lastStateChange']['When'] = dictTemp['stateLastRead']['When']
+      channel.field[channel.field_name(name='Temp')] = dictTemp['lastStateChange']['State']
+      anyChanges = True
+      logger.info("Temp has changed since last reading")
+    else:
+      logger.debug("Temp has NOT changed since last reading")
+    logger.debug(dictTemp)
+
+    # Test if the humidity has changed
+    dictHumid['stateLastRead']['State'] = round(sensorData['Humidity'], 0)
+    dictHumid['stateLastRead']['When'] = loopTime
+    if dictHumid['lastStateChange']['State'] == 'none' or dictHumid['lastStateChange']['State'] != dictHumid['stateLastRead']['State']:
+      dictHumid['lastStateChange']['State'] = dictHumid['stateLastRead']['State']
+      dictHumid['lastStateChange']['When'] = dictHumid['stateLastRead']['When']
+      channel.field[channel.field_name(name='Humidity')] = dictHumid['lastStateChange']['State']
+      anyChanges = True
+      logger.info("Humidity has changed since last reading")
+    else:
+      logger.debug("Humidity has NOT changed since last reading")
+    logger.debug(dictHumid)
+
+    # Test if the pressure has changed
+    dictPressure['stateLastRead']['State'] = round(sensorData['Pressure'], 0)
+    dictPressure['stateLastRead']['When'] = loopTime
+    if dictPressure['lastStateChange']['State'] == 'none' or dictPressure['lastStateChange']['State'] != dictPressure['stateLastRead']['State']:
+      dictPressure['lastStateChange']['State'] = dictPressure['stateLastRead']['State']
+      dictPressure['lastStateChange']['When'] = dictPressure['stateLastRead']['When']
+      channel.field[channel.field_name(name='Pressure')] = dictPressure['lastStateChange']['State']
+      anyChanges = True
+      logger.info("Pressure has changed since last reading")
+    else:
+      logger.debug("Pressure has NOT changed since last reading")
+    logger.debug(dictPressure)
+    
+    # Test the state of the main door
+    dictMainDoor['stateLastRead']['State'] = getDoorStatus("DOORMAIN")
+    dictMainDoor['stateLastRead']['When'] = loopTime
+    if dictMainDoor['lastStateChange']['State'] == 'none' or dictMainDoor['lastStateChange']['State'] != dictMainDoor['stateLastRead']['State']:
+      dictMainDoor['lastStateChange']['State'] = dictMainDoor['stateLastRead']['State']
+      dictMainDoor['lastStateChange']['When'] = dictMainDoor['stateLastRead']['When']
+      channel.field[channel.field_name(name='MainDoor')] = dictMainDoor['lastStateChange']['State']
+      anyChanges = True
+      logger.info("Pressure has changed since last reading")
+    else:
+      logger.debug("Pressure has NOT changed since last reading")
+    logger.debug(dictMainDoor)
+
+    # Test if the state of the side door
+    dictSideDoor['stateLastRead']['State'] = getDoorStatus("DOORSIDE")
+    dictSideDoor['stateLastRead']['When'] = loopTime
+    if dictSideDoor['lastStateChange']['State'] == 'none' or dictSideDoor['lastStateChange']['State'] != dictSideDoor['stateLastRead']['State']:
+      dictSideDoor['lastStateChange']['State'] = dictSideDoor['stateLastRead']['State']
+      dictSideDoor['lastStateChange']['When'] = dictSideDoor['stateLastRead']['When']
+      channel.field[channel.field_name(name='MainDoor')] = dictSideDoor['lastStateChange']['State']
+      anyChanges = True
+      logger.info("Pressure has changed since last reading")
+    else:
+      logger.debug("Pressure has NOT changed since last reading")
+    logger.debug(dictSideDoor)
+
+    # Send the data to thingspeak
+    if anyChanges == True:
+      logger.info("Writing to Thingspeak")
+      channel.post_update()
+    else:
+      logger.info("No Changes occured, not writing to thingspeak")
+
+
+    logger.info("Pausing for a few seconds")
+    time.sleep(10)
     
     
 
