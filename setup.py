@@ -15,3 +15,5 @@ setuptools.setup(
     'https://github.com/bbaumg/Python_Thingspeak/tarball/master#egg=thingspeak-1.1.1'
   ]
 )
+
+input("\n\nInstall is complete\nRename and update setting.yaml:  ")

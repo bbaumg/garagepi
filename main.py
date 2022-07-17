@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # END SETUP - BEGIN FUNCTIONS
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 def sendSMS(message):
-  logger.info("Starting...  Sending SMS Message:  '" + str(message) + "'")
+  logger.info("---------------------------------------Starting...  Sending SMS Message:  '" + str(message) + "'")
   twilioClient = twilio.rest.Client(appSettings['TWILIO']['SID'], appSettings['TWILIO']['TOKEN'])
   message = twilioClient.messages.create(
     to = appSettings['TWILIO']['TO'], 
@@ -43,7 +43,7 @@ def sendSMS(message):
   logger.info("Complete...  Sending SMS Message")
 
 def getDoorStatus(doorName):
-  logger.info("Starting... Check the door status:  '" + str(doorName) + "'")
+  logger.info("---------------------------------------Starting... Check the door status:  '" + str(doorName) + "'")
   if GPIO.input(appSettings[str(doorName)]['UPGPIO']) == False and GPIO.input(appSettings[str(doorName)]['DOWNPGPIO']) == False:
     logger.info("Door is opening/closing")
     doorState = "Moving"
@@ -176,16 +176,15 @@ Logic
 
 try:
   while True:
+    logger.info("========================== Top of Main Loop ==========================")
     loopTime = datetime.now()
+    logger.debug("Time = " + str(loopTime))
     anyChanges = False
     # Read the environmental sensor and store in a dictionaries for later use
     sensor = bme280()
     sensorData = dict()
     sensorData = sensor.readBME280Data()
     logger.debug(sensorData)
-
-
-
 
     # Prepare the thingspeak Channel
     channel = thingspeak(channel=appSettings['THINGSPEAK']['CHANNELID'], apiKey=appSettings['THINGSPEAK']['APIKEY'])
