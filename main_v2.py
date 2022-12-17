@@ -4,6 +4,7 @@ import time
 import logging
 import yaml
 from datetime import datetime
+from datetime import timedelta
 import twilio
 import twilio.rest
 from thingspeak.thingspeak import thingspeak
@@ -111,7 +112,7 @@ def updateValues(dictObj, reading, loopTime, readingType):
     anyChanges = True
     logger.info(str(readingType) + " has changed since last reading")
   else:
-    dictObj['lastStateChange']['Minutes'] = (dictObj['stateLastRead']['When']-dictObj['lastStateChange']['When']).seconds #chang this to real minutes
+    dictObj['lastStateChange']['Minutes'] = (dictObj['stateLastRead']['When']-dictObj['lastStateChange']['When']).seconds/60
     logger.info(str(readingType) + "  has NOT changed since last reading")
   logger.debug('anyChanges = ' + str(anyChanges))
   logger.debug(dictObj)
@@ -162,7 +163,7 @@ def testAlarm_old(dictObj, alarmType):
     logger.info("Checking if an alert should be sent")
     if (dictObj['inAlarm']['State'] == True):
       logger.info("Alert has already been sent checking if a re-alert should be sent")
-      dictObj['inAlarm']['Minutes'] = (dictObj['stateLastRead']['When']-dictObj['inAlarm']['When']).seconds #chang this to real minutes
+      dictObj['inAlarm']['Minutes'] = (dictObj['stateLastRead']['When']-dictObj['inAlarm']['When']).seconds/60 #chang this to real minutes
       logger.info('Time since last alert = ' + str(dictObj['inAlarm']['Minutes']))
       if (dictObj['inAlarm']['Minutes'] >= reAlarm):
         logger.info("In alarm too long resending alert")
@@ -190,28 +191,28 @@ def testAlarm(dictObj):
     logger.info("Testing Door alarm state")
     if(dictObj['lastStateChange']['State'] != 'Closed'):
       logger.debug("Door is NOT closed")
-      updateAlarmState(dictObj, True)
-      if(dictObj['inAlarm']['Minutes'] >= appSettings['ALARMS']['DOORTIME']):
-        logger.info("Past the time in alarm threshold")
-        #if(dictObj['alerted']['State'] == False):
-        #  logger.info("Sending the first alert for this alarm")
-        #  dictObj['alerted']['State'] = True
-        #  dictObj['alerted']['When'] = loopTime
-        #  dictObj['alerted']['Count'] += 1
-        #  #sendSMS
-        #elif(dictObj['alerted']['State'] == True and dictObj['stateLastRead']['When']-dictObj['alerted']['When'] >= appSettings['ALARMS']['RETRY']):
-        #  logger.info("Sending repate alert for this alarm")
-        #  dictObj['alerted']['Count'] += 1
-        #  logger.info("Alert Count = " + str(dictObj['alerted']['Count']))
-        #  #sendSMS
-        #elif(dictObj['alerted']['State'] == True and dictObj['stateLastRead']['When']-dictObj['alerted']['When'] <= appSettings['ALARMS']['RETRY']):
-        #  #do nothing
-        #  logger.info("It has not been long enough to send a repeat alert")
-        #else:
-        #  logger.info("check logic for when to send the alert")
-      else:
-        logger.info("Not enough time has passed yet")
-        #do something else
+      #updateAlarmState(dictObj, True)
+      # if(dictObj['inAlarm']['Minutes'] >= appSettings['ALARMS']['DOORTIME']):
+      #   logger.info("Past the time in alarm threshold")
+      #   if(dictObj['alerted']['State'] == False):
+      #     logger.info("Sending the first alert for this alarm")
+      #     dictObj['alerted']['State'] = True
+      #     dictObj['alerted']['When'] = loopTime
+      #     dictObj['alerted']['Count'] += 1
+      #     sendSMS(str(dictObj['name']) + " is in an alarm")
+      #   elif(dictObj['alerted']['State'] == True and dictObj['stateLastRead']['When']-dictObj['alerted']['When'].seconds/60 >= appSettings['ALARMS']['RETRY']):
+      #     logger.info("Sending repate alert for this alarm")
+      #     dictObj['alerted']['Count'] += 1
+      #     logger.info("Alert Count = " + str(dictObj['alerted']['Count']))
+      #     sendSMS(str(dictObj['name']) + " is in an alarm")
+      #   elif(dictObj['alerted']['State'] == True and dictObj['stateLastRead']['When']-dictObj['alerted']['When'].seconds/60 <= appSettings['ALARMS']['RETRY']):
+      #     #do nothing
+      #     logger.info("It has not been long enough to send a repeat alert")
+      #   else:
+      #     logger.info("check logic for when to send the alert")
+      # else:
+      #   logger.info("Not enough time has passed yet")
+      #   #do something else
     else:
       logger.debug("Door is closed")
       updateAlarmState(dictObj, False)
@@ -220,7 +221,7 @@ def testAlarm(dictObj):
     if(dictObj['lastStateChange']['State'] <= appSettings['ALARMS']['TEMPMIN'] or dictObj['lastStateChange']['State'] >= appSettings['ALARMS']['TEMPMAX']):
       logger.debug("Temp is outside accepted range")
       updateAlarmState(dictObj, True)
-      if((dictObj['stateLastRead']['When']-dictObj['inAlarm']['When']).seconds >= appSettings['ALARMS']['TEMPTIME']):
+      if((dictObj['stateLastRead']['When']-dictObj['inAlarm']['When'])/60 >= appSettings['ALARMS']['TEMPTIME']):
         logger.info("Past the time in alarm threshold")
         #DO SOMETHING
       else:
@@ -242,8 +243,8 @@ def updateAlarmState(dictObj, alarmState):
     dictObj['inAlarm']['State'] = True
     if(dictObj['inAlarm']['When'] == 'none'):
       dictObj['inAlarm']['When'] = loopTime
-    dictObj['inAlarm']['Minutes'] = (dictObj['stateLastRead']['When']-dictObj['inAlarm']['When']).seconds
-    logger.debug((dictObj['stateLastRead']['When']-dictObj['inAlarm']['When']).seconds)
+    dictObj['inAlarm']['Minutes'] = (dictObj['stateLastRead']['When']-dictObj['inAlarm']['When']).seconds/60
+    logger.debug("Time in alarm: " + str(dictObj['inAlarm']['Minutes']))
   elif(alarmState == False):
     logger.info("NOT in an alarmed state")
     dictObj['inAlarm']['State'] = False
@@ -296,6 +297,24 @@ dictHumid = dict()
 setupDict(dictHumid, 'dictHumid', 'Garage Humidity', 'none')
 dictPressure = dict()
 setupDict(dictPressure, 'dictPressure', 'Garage Pressure', 'none')
+
+# Testing seed values
+dictMainDoor['lastStateChange']['State'] = 'Open'
+dictMainDoor['lastStateChange']['When'] = datetime.now() - timedelta(minutes=22)
+dictMainDoor['lastStateChange']['Minutes'] = 0
+dictSideDoor['lastStateChange']['State'] = 'Closed'
+dictSideDoor['lastStateChange']['When'] = datetime.now() - timedelta(minutes=900)
+dictSideDoor['lastStateChange']['Minutes'] = 0
+dictTemp['lastStateChange']['State'] = '77.0'
+dictTemp['lastStateChange']['When'] = datetime.now() - timedelta(minutes=1)
+dictTemp['lastStateChange']['Minutes'] = 1
+dictHumid['lastStateChange']['State'] = '55.0'
+dictHumid['lastStateChange']['When'] = datetime.now() - timedelta(minutes=1)
+dictHumid['lastStateChange']['Minutes'] = 1
+dictPressure['lastStateChange']['State'] = '979.0'
+dictPressure['lastStateChange']['When'] = datetime.now() - timedelta(minutes=1)
+dictPressure['lastStateChange']['Minutes'] = 1
+
 
 try:
   while True:
